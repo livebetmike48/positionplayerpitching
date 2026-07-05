@@ -1,5 +1,6 @@
 import os
 import logging
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 import discord
@@ -55,14 +56,6 @@ def build_alert_embed(game: dict, leading_team: str, trailing_team: str, lead: i
         ),
         color=discord.Color.red(),
     )
-    embed.add_field(
-        name="Why it matters",
-        value=(
-            f"{trailing_team} can now bring in a position player to pitch "
-            f"(8+ run threshold reached). Bullpen usage/run-line implications kick in."
-        ),
-        inline=False,
-    )
     embed.set_footer(text="Data: MLB Stats API")
     return embed
 
@@ -80,7 +73,7 @@ async def poll_blowouts():
 
     date_str = et_date_str(0)
     try:
-        games = mlb_api.get_live_games(date_str)
+        games = await asyncio.to_thread(mlb_api.get_live_games, date_str)
     except Exception as e:
         log.error("Failed to fetch live games: %s", e)
         return
@@ -132,12 +125,42 @@ async def setchannel(interaction: discord.Interaction):
     )
 
 
+@bot.tree.command(name="scores", description="Check current scores for every MLB game today")
+async def scores(interaction: discord.Interaction):
+    await interaction.response.defer()
+    date_str = et_date_str(0)
+    try:
+        games = await asyncio.to_thread(mlb_api.get_live_games, date_str)
+    except Exception as e:
+        await interaction.followup.send(f"Couldn't reach the MLB API right now: {e}")
+        return
+
+    if not games:
+        await interaction.followup.send("No MLB games scheduled today.")
+        return
+
+    lines = []
+    for g in games:
+        matchup = f"{g['away_team']} @ {g['home_team']}"
+        if g["abstract_state"] == "Final":
+            lines.append(f"**{matchup}** — Final: {g['away_runs']}-{g['home_runs']}")
+        elif g["abstract_state"] == "Live":
+            inning_str = f"{g.get('inning_state') or ''} {g.get('inning') or ''}".strip()
+            lines.append(f"**{matchup}** — {g['away_runs']}-{g['home_runs']} ({inning_str})")
+        else:
+            lines.append(f"**{matchup}** — {g['status']}")
+
+    embed = discord.Embed(title=f"MLB Scores — {date_str}", description="\n".join(lines), color=discord.Color.blue())
+    embed.set_footer(text="Data: MLB Stats API")
+    await interaction.followup.send(embed=embed)
+
+
 @bot.tree.command(name="blowouts", description="Check right now for any games currently up by 8+ runs")
 async def blowouts(interaction: discord.Interaction):
     await interaction.response.defer()
     date_str = et_date_str(0)
     try:
-        games = mlb_api.get_live_games(date_str)
+        games = await asyncio.to_thread(mlb_api.get_live_games, date_str)
     except Exception as e:
         await interaction.followup.send(f"Couldn't reach the MLB API right now: {e}")
         return
