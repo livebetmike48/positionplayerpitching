@@ -1,5 +1,6 @@
 import os
 import logging
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 import discord
@@ -72,7 +73,7 @@ async def poll_blowouts():
 
     date_str = et_date_str(0)
     try:
-        games = mlb_api.get_live_games(date_str)
+        games = await asyncio.to_thread(mlb_api.get_live_games, date_str)
     except Exception as e:
         log.error("Failed to fetch live games: %s", e)
         return
@@ -129,7 +130,7 @@ async def scores(interaction: discord.Interaction):
     await interaction.response.defer()
     date_str = et_date_str(0)
     try:
-        games = mlb_api.get_live_games(date_str)
+        games = await asyncio.to_thread(mlb_api.get_live_games, date_str)
     except Exception as e:
         await interaction.followup.send(f"Couldn't reach the MLB API right now: {e}")
         return
@@ -159,7 +160,7 @@ async def blowouts(interaction: discord.Interaction):
     await interaction.response.defer()
     date_str = et_date_str(0)
     try:
-        games = mlb_api.get_live_games(date_str)
+        games = await asyncio.to_thread(mlb_api.get_live_games, date_str)
     except Exception as e:
         await interaction.followup.send(f"Couldn't reach the MLB API right now: {e}")
         return
