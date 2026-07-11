@@ -81,7 +81,9 @@ async def poll_blowouts():
     for g in games:
         if g["abstract_state"] != "Live":
             continue
-        if storage.already_alerted(g["game_pk"]):
+        already = storage.already_alerted(g["game_pk"])
+        if already:
+            log.info("Skipping already-alerted game %s (blowout check)", g["game_pk"])
             continue
 
         result = leading_side(g)
@@ -91,6 +93,7 @@ async def poll_blowouts():
 
         if lead >= LEAD_THRESHOLD:
             storage.mark_alerted(g["game_pk"], date_str, leading_team, trailing_team, lead)
+            log.info("Marking alerted BEFORE send: game=%s team=%s lead=%d", g["game_pk"], leading_team, lead)
             try:
                 await channel.send(embed=build_alert_embed(g, leading_team, trailing_team, lead))
                 log.info("Alerted blowout: game %s, %s up %d", g["game_pk"], leading_team, lead)
