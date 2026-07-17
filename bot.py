@@ -95,7 +95,16 @@ async def poll_blowouts():
             storage.mark_alerted(g["game_pk"], date_str, leading_team, trailing_team, lead)
             log.info("Marking alerted BEFORE send: game=%s team=%s lead=%d", g["game_pk"], leading_team, lead)
             try:
-                await channel.send(embed=build_alert_embed(g, leading_team, trailing_team, lead))
+                # enforce_nonce: Discord's server refuses to create a second
+                # message with the same nonce -- makes the HTTP-retry
+                # duplicate (one logical send landing twice on a flaky
+                # connection) physically impossible. Nonce must be unique
+                # per intended message and <= 25 chars.
+                await channel.send(
+                    embed=build_alert_embed(g, leading_team, trailing_team, lead),
+                    nonce=f"blowout-{g['game_pk']}",
+                    enforce_nonce=True,
+                )
                 log.info("Alerted blowout: game %s, %s up %d", g["game_pk"], leading_team, lead)
             except Exception as e:
                 log.error("Failed to send blowout alert for game %s: %s", g["game_pk"], e)
