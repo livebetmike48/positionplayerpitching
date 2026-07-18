@@ -92,17 +92,23 @@ async def poll_blowouts():
         leading_team, trailing_team, lead = result
 
         if lead >= LEAD_THRESHOLD:
+            embed = build_alert_embed(g, leading_team, trailing_team, lead)
             try:
-                # enforce_nonce: Discord's server refuses to create a second
-                # message with the same nonce -- makes the HTTP-retry
-                # duplicate (one logical send landing twice on a flaky
-                # connection) physically impossible. Nonce must be unique
-                # per intended message and <= 25 chars.
-                await channel.send(
-                    embed=build_alert_embed(g, leading_team, trailing_team, lead),
-                    nonce=f"blowout-{g['game_pk']}",
-                    enforce_nonce=True,
-                )
+                try:
+                    # enforce_nonce: Discord's server refuses to create a second
+                    # message with the same nonce -- makes the HTTP-retry
+                    # duplicate physically impossible. Requires discord.py >= 2.5.
+                    await channel.send(
+                        embed=embed,
+                        nonce=f"blowout-{g['game_pk']}",
+                        enforce_nonce=True,
+                    )
+                except TypeError:
+                    # Installed discord.py predates enforce_nonce (added in 2.5).
+                    # Fall back to a plain send so the alert still goes out --
+                    # losing dupe protection beats never posting at all.
+                    log.warning("discord.py too old for enforce_nonce -- sending without it (game %s)", g["game_pk"])
+                    await channel.send(embed=embed)
                 log.info("Alerted blowout: game %s, %s up %d", g["game_pk"], leading_team, lead)
                 # Only mark alerted AFTER a confirmed successful send, so a
                 # failed send (e.g. API/library error) leaves the game
