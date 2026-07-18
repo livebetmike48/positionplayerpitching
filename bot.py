@@ -92,8 +92,6 @@ async def poll_blowouts():
         leading_team, trailing_team, lead = result
 
         if lead >= LEAD_THRESHOLD:
-            storage.mark_alerted(g["game_pk"], date_str, leading_team, trailing_team, lead)
-            log.info("Marking alerted BEFORE send: game=%s team=%s lead=%d", g["game_pk"], leading_team, lead)
             try:
                 # enforce_nonce: Discord's server refuses to create a second
                 # message with the same nonce -- makes the HTTP-retry
@@ -106,6 +104,11 @@ async def poll_blowouts():
                     enforce_nonce=True,
                 )
                 log.info("Alerted blowout: game %s, %s up %d", g["game_pk"], leading_team, lead)
+                # Only mark alerted AFTER a confirmed successful send, so a
+                # failed send (e.g. API/library error) leaves the game
+                # eligible for retry on the next poll instead of being
+                # silently skipped forever.
+                storage.mark_alerted(g["game_pk"], date_str, leading_team, trailing_team, lead)
             except Exception as e:
                 log.error("Failed to send blowout alert for game %s: %s", g["game_pk"], e)
 
